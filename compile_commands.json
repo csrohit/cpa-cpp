@@ -1,0 +1,26 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "main.o",
+      "main.cpp"
+    ],
+    "directory": "/Users/csrohit/code/cpp",
+    "file": "/Users/csrohit/code/cpp/main.cpp",
+    "output": "/Users/csrohit/code/cpp/main.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-o",
+      "msg.o",
+      "msg.cpp"
+    ],
+    "directory": "/Users/csrohit/code/cpp",
+    "file": "/Users/csrohit/code/cpp/msg.cpp",
+    "output": "/Users/csrohit/code/cpp/msg.o"
+  }
+]
