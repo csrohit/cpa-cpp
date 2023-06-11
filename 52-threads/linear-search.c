@@ -1,11 +1,12 @@
 /**
- * @file    addition.c
- * @brief   Sum of array with multiple threads
+ * @file    linear-search.c
+ * @brief   Linear search with multiple threads
  *
  * @author  Rohit Nimkar
- * @date    06/10/2023
+ * @date    06/11/2023
  * @version 1.0
  */
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,17 +19,21 @@ typedef struct input
     int *pArr;
     size_t start_index;
     size_t nElements;
+    int key;
 } thread_input_t;
 
-void * search(void *pArgs)
+void *search(void *pArgs)
 {
     thread_input_t *pInput = (thread_input_t *)pArgs;
-    size_t sum = 0;
-    for(size_t idx = 0; idx < pInput->nElements; ++idx)
+    for(size_t idx = pInput->start_index; idx < pInput->nElements + pInput->start_index; ++idx)
     {
-        sum += *(pInput->pArr + idx + pInput->start_index);
+            // printf("[%lu] searching %d against %d\n",pthread_self(), pInput->key, *(pInput->pArr + idx));
+        if(pInput->key == *(pInput->pArr + idx))
+        {
+            return (void *)idx;
+        }
     }
-    return (void *) sum;
+    return NULL;
 }
 
 int *build_arr(size_t size)
@@ -44,17 +49,26 @@ int *build_arr(size_t size)
     return (pArr);
 }
 
+void printArr(int *pArr, size_t len)
+{
+    for (size_t idx = 0; idx < len; ++idx)
+    {
+        printf("%3d", *(pArr + idx));
+    }
+    putchar('\n');
+}
+
 int main()
 {
     thread_input_t *pThreadInput = NULL;
     pthread_t *pHndl;
     size_t total_threads;
     size_t nThreads = 4;
-    size_t nElementsPerThread = 2500;
-    size_t totalElements = 10000;
+    size_t nElementsPerThread = 5;
+    size_t totalElements = 20;
     int *pArr = NULL;
     void *threadRet = NULL;
-    size_t sumFinal = 0;
+    size_t key = 15;
     
     int ret = 0;
     pArr = build_arr(totalElements);
@@ -63,6 +77,7 @@ int main()
         perror("failed to allocate array");
         _exit(errno);
     }
+    // printArr(pArr, totalElements);
 
     /* generate array */
     pArr = build_arr(totalElements);
@@ -92,6 +107,7 @@ int main()
         (pThreadInput + idx)->pArr = pArr;
         (pThreadInput + idx)->start_index = nElementsPerThread * idx;
         (pThreadInput + idx)->nElements = nElementsPerThread;
+        (pThreadInput + idx)->key = key;
         
         ret = pthread_create(pHndl + idx, NULL, search, (void *)(pThreadInput + idx));
         if(0 > ret)
@@ -115,11 +131,16 @@ int main()
                 /* handle this case gracefully */
                 continue;
             }
-
-            sumFinal += (size_t) threadRet;
         }
     }
-    printf("Final sum: %lu\n", sumFinal);
+    if(NULL == threadRet)
+    {
+        printf("Key not found\n");
+    }
+    else
+    {
+        printf("key found at index: %lu\n", (size_t)threadRet);
+    }
 
     /* release resources */
     free(pThreadInput);
