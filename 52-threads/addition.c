@@ -7,8 +7,12 @@
  * @version 1.0
  */
 
+#include <bits/types/struct_timeval.h>
+#include <time.h>
+#include <sys/time.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/select.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
@@ -20,7 +24,7 @@ typedef struct input
     size_t nElements;
 } thread_input_t;
 
-void * search(void *pArgs)
+void * addition(void *pArgs)
 {
     thread_input_t *pInput = (thread_input_t *)pArgs;
     size_t sum = 0;
@@ -49,14 +53,27 @@ int main()
     thread_input_t *pThreadInput = NULL;
     pthread_t *pHndl;
     size_t total_threads;
-    size_t nThreads = 4;
-    size_t nElementsPerThread = 2500;
-    size_t totalElements = 10000;
+    int nThreads = 4;
+    size_t nElementsPerThread = 25000;
+    size_t totalElements = 100000;
     int *pArr = NULL;
     void *threadRet = NULL;
     size_t sumFinal = 0;
-    
+    struct timeval initial_tv = {0};
+    struct timeval final_tv = {0};
     int ret = 0;
+
+    printf("Enter number of threads: ");
+    scanf("%d", &nThreads);
+
+    do
+    {
+        printf("Enter total number of elements (multiple of %d): ", nThreads);
+        scanf("%zu", &totalElements);
+    }while (totalElements % nThreads);
+
+    nElementsPerThread = totalElements/nThreads;
+
     pArr = build_arr(totalElements);
     if(NULL == pArr)
     {
@@ -67,63 +84,96 @@ int main()
     /* generate array */
     pArr = build_arr(totalElements);
 
-    // generate threadHandles
-    pHndl = (pthread_t *)calloc(nThreads, sizeof(pthread_t));
-    if(NULL == pHndl)
+    if(nThreads == 1)
     {
-        free(pArr);
-        perror("failed to allocate thread handles");
-        _exit(errno);
+        gettimeofday(&initial_tv, NULL);
+        printf("Running in single threaded mode\n");
+        thread_input_t singleInput = {};
+        singleInput.pArr = pArr;
+        singleInput.nElements = totalElements;
+        singleInput.start_index = 0;
+        sumFinal = (unsigned long) addition(&singleInput);
+        gettimeofday(&final_tv, NULL);
     }
-
-    // allocate thread pInputs
-    pThreadInput = (thread_input_t *)calloc(nThreads, sizeof(thread_input_t));
-    if(NULL == pThreadInput)
+    else
     {
-        free(pHndl);
-        free(pArr);
-        perror("failed to allocate thread pInputs");
-        _exit(errno);
-    }
-
-    // create pInputs;
-    for (size_t idx = 0; idx < nThreads; idx++)
-    {
-        (pThreadInput + idx)->pArr = pArr;
-        (pThreadInput + idx)->start_index = nElementsPerThread * idx;
-        (pThreadInput + idx)->nElements = nElementsPerThread;
-        
-        ret = pthread_create(pHndl + idx, NULL, search, (void *)(pThreadInput + idx));
-        if(0 > ret)
+        printf("Running in multi-threaded mode\n");
+        // generate threadHandles
+        pHndl = (pthread_t *)calloc(nThreads, sizeof(pthread_t));
+        if(NULL == pHndl)
         {
-            perror("failed to create threads");
-            break;
+            free(pArr);
+            perror("failed to allocate thread handles");
+            _exit(errno);
         }
-    }
 
-
-    /* join all threads */
-    for(size_t idx = 0; idx < nThreads; ++idx)
-    {
-        /* verify if thread created */
-        if(0 != *(pHndl + idx))
+        // allocate thread pInputs
+        pThreadInput = (thread_input_t *)calloc(nThreads, sizeof(thread_input_t));
+        if(NULL == pThreadInput)
         {
-            ret = pthread_join(*(pHndl + idx), &threadRet);
-            if( 0 > ret)
+            free(pHndl);
+            free(pArr);
+            perror("failed to allocate thread pInputs");
+            _exit(errno);
+        }
+        ret = gettimeofday(&initial_tv, NULL); 
+
+        // create pInputs;
+        for (size_t idx = 0; idx < nThreads; idx++)
+        {
+            (pThreadInput + idx)->pArr = pArr;
+            (pThreadInput + idx)->start_index = nElementsPerThread * idx;
+            (pThreadInput + idx)->nElements = nElementsPerThread;
+
+            ret = pthread_create(pHndl + idx, NULL, addition, (void *)(pThreadInput + idx));
+            if(0 > ret)
             {
-                perror("pthread_join failed");
-                /* handle this case gracefully */
-                continue;
+                perror("failed to create threads");
+                break;
             }
-
-            sumFinal += (size_t) threadRet;
         }
+
+        /* join all threads */
+        for(size_t idx = 0; idx < nThreads; ++idx)
+        {
+            /* verify if thread created */
+            if(0 != *(pHndl + idx))
+            {
+                ret = pthread_join(*(pHndl + idx), &threadRet);
+                if( 0 > ret)
+                {
+                    perror("pthread_join failed");
+                    /* handle this case gracefully */
+                    continue;
+                }
+
+                sumFinal += (size_t) threadRet;
+            }
+        }
+        ret = gettimeofday(&final_tv, NULL);
+        free(pThreadInput);
+        free(pHndl);
     }
+
     printf("Final sum: %lu\n", sumFinal);
+    // printf("Initial time %ld %ld\n", initial_tv.tv_sec, initial_tv.tv_usec);
+    // printf("Initial time %ld %ld\n", final_tv.tv_sec, final_tv.tv_usec);
+
+    struct timeval diff = {};
+    /* calculate difference final - initial */
+    if(final_tv.tv_usec < initial_tv.tv_usec)
+    {
+        diff.tv_usec = 1000000 + final_tv.tv_usec - initial_tv.tv_usec;
+        diff.tv_sec = final_tv.tv_sec - initial_tv.tv_sec - 1;
+    }
+    else
+    {
+        diff.tv_usec = final_tv.tv_usec - initial_tv.tv_usec;
+        diff.tv_sec = final_tv.tv_sec - initial_tv.tv_sec;
+    }
+    printf("Total time taken: %lu seconds %lu useconds\n", diff.tv_sec, diff.tv_usec);
 
     /* release resources */
-    free(pThreadInput);
-    free(pHndl);
     free(pArr);
 
     return (0);
